@@ -2,8 +2,7 @@ package pgscan
 
 import (
 	"database/sql"
-	"fmt"
-	"log"
+	"time"
 )
 
 type AAAA struct {
@@ -14,9 +13,9 @@ type AAAA struct {
 // and returns the result of query.
 //
 // data is scanned from the DB into a list of interfaces
-func (db *AAAA) Scan(tableName string, columnNames []string) [][]interface{} {
+func (db *AAAA) Scan(tableName string, columnNames []string) ([][]interface{}, error) {
 	noOfColumns := len(columnNames)
-	table := make([][]interface{}, noOfColumns)
+	table := make([][]interface{}, 0, noOfColumns)
 
 	query := "SELECT "
 	// concat the columns into a query string
@@ -32,9 +31,8 @@ func (db *AAAA) Scan(tableName string, columnNames []string) [][]interface{} {
 
 	rows, err := db.DB.Query(query)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	fmt.Printf("Data queried successfully!\n")
 	defer rows.Close()
 
 	for rows.Next() {
@@ -43,31 +41,27 @@ func (db *AAAA) Scan(tableName string, columnNames []string) [][]interface{} {
 			tmpRow[i] = new(interface{})
 		}
 		if err := rows.Scan(tmpRow...); err != nil {
-			log.Print("failed scanning row")
+			return nil, err
 		}
-		// rows.ColumnTypes()
+		for i := range tmpRow {
+			a, _ := tmpRow[i].(*interface{})
+
+			switch x := (*a).(type) {
+			case string:
+				tmpRow[i] = x
+			case int, int8, int16, int32, int64:
+				tmpRow[i] = x
+			case float32, float64:
+				tmpRow[i] = x
+			case bool:
+				tmpRow[i] = x
+			case time.Time:
+				tmpRow[i] = x
+			case []byte:
+				tmpRow[i] = x
+			}
+		}
 		table = append(table, tmpRow)
 	}
-	return table
-	// nicePrintTable(table, columnNames, noOfColumns)
-	// for _, colName := range columnNames {
-	// 	fmt.Printf("%s\t", colName)
-	// }
-	// fmt.Println()
-	// for _, row := range table {
-	// 	for _, colVal := range row {
-	// 		valPtr := colVal.(*interface{})
-	// 		// val := (*valPtr).(interface{})
-	// 		switch v := (*valPtr).(type) {
-	// 		case string:
-	// 			fmt.Printf("%s\t", v)
-	// 		case int64, int32, int, float32, float64:
-	// 			fmt.Printf("%d\t", v)
-	// 		default:
-	// 			fmt.Printf("unknown type\t")
-	// 		}
-	// 	}
-	// 	fmt.Println()
-	// }
-	// fmt.Println()
+	return table, nil
 }
