@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"pgscan/pgscan"
 
 	_ "github.com/lib/pq"
+	tbl "github.com/rodaine/table"
 )
 
 const (
@@ -36,57 +38,28 @@ func main() {
 
 	fmt.Println("Successfully connected to the database!")
 
-	database := AAAA{db: db}
-	database.scan("city", []string{"name", "population"})
+	database := pgscan.AAAA{DB: db}
+	columnNames := []string{"name", "population"}
+	table := database.Scan("city", columnNames)
+	nicePrintTable(table, columnNames, len(columnNames))
 }
 
-type AAAA struct {
-	db *sql.DB
-}
-
-// scan is a function that accepts table name and it's columns as arguments
-// and returns the result of query.
-//
-// data is scanned from the DB into a list of interfaces
-func (db *AAAA) scan(tableName string, columns []string) {
-	values := make([]interface{}, len(columns))
-	for i := range values {
-		values[i] = new(interface{}) // Allocate memory for each column
+func nicePrintTable(table [][]interface{}, columnNames []string, noOfColumns int) {
+	interfaceSlice := make([]interface{}, noOfColumns)
+	for i, v := range columnNames {
+		interfaceSlice[i] = v
 	}
-	query := "SELECT "
-	// concat the columns into a query string
-	for i, column := range columns {
-		query += `"` + column + `"`
-		// add a comma if it's not the last column
-		if i < len(columns)-1 {
-			query += ", "
+	formatedTable := tbl.New(interfaceSlice...)
+
+	for _, row := range table {
+		tmpRow := make([]interface{}, 0, 2)
+		for _, colVal := range row {
+			valPtr := colVal.(*interface{})
+			tmpRow = append(tmpRow, *valPtr)
 		}
+		formatedTable.AddRow(tmpRow...)
+
 	}
 
-	query += " FROM " + tableName
-
-	err := db.db.QueryRow(query).Scan(values...)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Data scanned successfully!\n")
-	for _, c := range columns {
-		fmt.Printf("%s\t", c)
-	}
-	fmt.Println()
-	for _, v := range values {
-		s, _ := (v).(*interface{})
-		s1, _ := (*s).(interface{})
-		switch s1.(type) {
-		case string:
-			s12, _ := (s1).(string)
-			fmt.Printf("%s\t", s12)
-			continue
-		case int32, int64, int, float32, float64:
-			s12, _ := (s1).(int64)
-			fmt.Printf("%d\t", s12)
-			continue
-		}
-	}
-	fmt.Println()
+	formatedTable.Print()
 }
