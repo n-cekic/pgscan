@@ -2,7 +2,6 @@ package pgscan
 
 import (
 	"database/sql"
-	"time"
 )
 
 type AAAA struct {
@@ -13,9 +12,9 @@ type AAAA struct {
 // and returns the result of query.
 //
 // data is scanned from the DB into a list of interfaces
-func (db *AAAA) Scan(tableName string, columnNames []string) ([][]interface{}, error) {
+func (db *AAAA) Scan(tableName string, columnNames []string) ([]map[string]interface{}, error) {
 	noOfColumns := len(columnNames)
-	table := make([][]interface{}, 0, noOfColumns)
+	table := make([]map[string]interface{}, 0)
 
 	query := "SELECT "
 	// concat the columns into a query string
@@ -36,32 +35,30 @@ func (db *AAAA) Scan(tableName string, columnNames []string) ([][]interface{}, e
 	defer rows.Close()
 
 	for rows.Next() {
-		tmpRow := make([]interface{}, noOfColumns)
-		for i := range tmpRow {
-			tmpRow[i] = new(interface{})
+		columns := make([]interface{}, len(columnNames))
+		scanArgs := make([]interface{}, len(columnNames))
+		for i := range columns {
+			scanArgs[i] = &columns[i]
 		}
-		if err := rows.Scan(tmpRow...); err != nil {
+
+		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, err
 		}
-		for i := range tmpRow {
-			a, _ := tmpRow[i].(*interface{})
 
-			switch x := (*a).(type) {
-			case string:
-				tmpRow[i] = x
-			case int, int8, int16, int32, int64:
-				tmpRow[i] = x
-			case float32, float64:
-				tmpRow[i] = x
-			case bool:
-				tmpRow[i] = x
-			case time.Time:
-				tmpRow[i] = x
-			case []byte:
-				tmpRow[i] = x
-			}
+		colTypes, _ := rows.ColumnTypes()
+
+		// Create a map for the row
+		row := make(map[string]interface{})
+		for i, colName := range columnNames {
+			row[colName] = columns[i]
 		}
-		table = append(table, tmpRow)
+
+		for i, ct := range colTypes {
+			tp := ct.ScanType().
+			row[ct.Name()] = row[ct.Name()].(tp.)
+		}
+
+		table = append(table, row)
 	}
 	return table, nil
 }

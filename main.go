@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"pgscan/pgscan"
@@ -49,21 +50,20 @@ func main() {
 	if err != nil {
 		log.Fatal("database scan returned: ", err.Error())
 	}
-	var TestingTable []Testing
-	data, _ := json.Marshal(table)
-	json.Unmarshal(data, &TestingTable)
+	var TestingTable Table
+	data, err := json.Marshal(table)
+	if err != nil {
+		log.Fatal("josn marshalling returned: ", err.Error())
+	}
+	err = TestingTable.UnmarshalJSON(data)
+	if err != nil {
+		log.Fatal("josn unmarshalling returned: ", err.Error())
+	}
 	fmt.Printf("%+v", TestingTable)
-
-	// jsonTable, err := json.Marshal(table)
-	// if err != nil {
-	// 	log.Fatal("josn marshalling returned: ", err.Error())
-	// }
-	// err = json.Unmarshal(jsonTable, &TestingTable)
-	// if err != nil {
-	// 	log.Fatal("josn unmarshalling returned: ", err.Error())
-	// }
 	// nicePrintTable(table, columnNames, len(columnNames))
 }
+
+type Table []Testing
 
 type Testing struct {
 	ID         int8            `json:"id"`
@@ -73,6 +73,50 @@ type Testing struct {
 	Checked    bool            `json:"checked"`
 	ListString []string        `json:"list_string"`
 	Col7       []float32       `json:"column_7"`
+}
+
+func (t *Testing) UnmarshalJSON(bytes []byte) error {
+	// Define a temporary alias to avoid recursion
+	type Alias Testing
+	aux := &struct {
+		CreatedAt string `json:"created_at"`
+		*Alias
+	}{
+		Alias: (*Alias)(t),
+	}
+
+	// Unmarshal into the temporary struct
+	if err := json.Unmarshal(bytes, &aux); err != nil {
+		return err
+	}
+
+	// Parse CreatedAt timestamp
+	parsedTime, err := time.Parse(time.RFC3339, aux.CreatedAt)
+	if err != nil {
+		return errors.New("invalid timestamp format for 'created_at'")
+	}
+	t.CreatedAt = parsedTime
+
+	return nil
+}
+
+func (t *Table) UnmarshalJSON(bytes []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(bytes, &raw); err != nil {
+		return err
+	}
+
+	var temp Table
+	for _, r := range raw {
+		var test Testing
+		if err := json.Unmarshal(r, &test); err != nil {
+			return err
+		}
+		temp = append(temp, test)
+	}
+
+	*t = temp
+	return nil
 }
 
 func nicePrintTable(table [][]interface{}, columnNames []string, noOfColumns int) {
